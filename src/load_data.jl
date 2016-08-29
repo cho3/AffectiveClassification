@@ -18,6 +18,15 @@ affect2ind = Dict{AbstractString,Int}("anger"=>1, "disgust"=>2, "fear"=>3,
                                     "anticipation"=>7, "trust"=>8, "negative"=>9,
                                     "positive"=>9)
                                     
+function load_semeval(path::AbstractString=joinpath("..","affect-data","semeval2006"))
+    
+    # TODO load gold, load valence
+    # TODO load xml
+    # TODO parse, join etc...
+
+
+    return semeval
+end
 
 function load_twitter(fname::AbstractString=joinpath("..","affect-data","Jan9-2012-tweets-clean.txt"))
 
@@ -212,13 +221,34 @@ function load_alm(path::AbstractString=joinpath("..","affect-data","alm2007"))
     return data
 end
 
-function load_data() # TODO default args 
+function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomStream()) # TODO default args 
 
     alm = load_alm()
     twitter = load_twitter()
     lexicon = load_lexicon()
     hashtags = load_hashtags()
 
-    return vcat(alm, twitter, lexicon, hashtags)
+    # shuffle data for reasons
+    alm = shuffle!(rng, alm)
+    twitter = shuffle!(rng, twitter)
+    lexicon = shuffle!(rng, lexicon)
+    hashtags = shuffle!(rng, lexicon)
 
+    # split into test set; should do it better but whatever
+    n = convert(Int, round(length(alm * train_fraction) ) )
+    alm_train, alm_test = alm[1:n], alm[n+1:end]
+
+    n = convert(Int, round(length(twitter * train_fraction) ) )
+    twitter_train, twitter_test = twitter[1:n], twitter[n+1:end]
+
+    n = convert(Int, round(length(lexicon * train_fraction) ) )
+    lexicon_train, lexicon_test = lexicon[1:n], lexicon[n+1:end]
+
+    n = convert(Int, round(length(hashtags * train_fraction) ) )
+    hashtags_train, hashtags_test = hashtags[1:n], hashtags[n+1:end]
+
+    train = vcat(alm_train, twitter_train, lexicon_train, hashtags_train)
+    test = vcat(alm_test, twitter_test, lexicon_test, hashtags_test)
+
+    return train, test
 end

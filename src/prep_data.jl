@@ -32,10 +32,8 @@ function prep_word_vecs(data::Vector{AffectDatum})
 
 end
 
-function to_bag_of_words(data::Vector{AffectDatum})
+function to_bag_of_words(data::Vector{AffectDatum}, word2ind::Dict{AbstractString,Int}=prep_word_vecs(data))
     
-    word2ind = prep_word_vecs(data)
-
     n = length(data)
     m = length(word2ind)
 
@@ -68,3 +66,5 @@ end
 function lsi()
 
 end
+
+
