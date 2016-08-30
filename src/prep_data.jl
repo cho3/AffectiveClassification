@@ -5,9 +5,21 @@ Data loading and preprocessing stuff
 
 punctuation = Set{Char}(['.', ',', '\'', '"', '!', '?'])
 
+function load_stopwords(file::AbstractString="stopwords_en.txt")
+
+    f = open(file)
+    stopwords = Set{AbstractString}()
+    for word in readlines(f)
+        push!(stopwords,strip(word,('\n', '\r', )))
+    end
+    close(f)
+
+    return stopwords
+end
+
 # pass through data to figure out word->index mappings, size of vocabulary
 # can also remove stop words and do stemming/word normalization here
-function prep_word_vecs(data::Vector{AffectDatum})
+function prep_word_vecs(data::Vector{AffectDatum}; stopwords::Set{AbstractString}=Set{AbstractString}() )
     
     word2ind = Dict{AbstractString,Int}()
 
@@ -17,7 +29,7 @@ function prep_word_vecs(data::Vector{AffectDatum})
         for word in text
             # TODO optional text normalization here (specific form of words can have different qualities as modifiers or affective)
             word_clean = lowercase( strip(word,  punctuation) )
-            if (word_clean in word2ind)
+            if (word_clean in word2ind) || (word_clean in stopwords)
                continue 
             end
 
@@ -32,7 +44,10 @@ function prep_word_vecs(data::Vector{AffectDatum})
 
 end
 
-function to_bag_of_words(data::Vector{AffectDatum}, word2ind::Dict{AbstractString,Int}=prep_word_vecs(data))
+function to_bag_of_words(
+                        data::Vector{AffectDatum}, 
+                        word2ind::Dict{AbstractString,Int}=prep_word_vecs(data) 
+                        )
     
     n = length(data)
     m = length(word2ind)
@@ -46,7 +61,11 @@ function to_bag_of_words(data::Vector{AffectDatum}, word2ind::Dict{AbstractStrin
         for word in text
             # TODO text norm...
             word_clean = lowercase( strip( word, punctuation) )
-            idx = word2ind[word_clean]
+            idx = get(word2ind, word_clean, -1)
+            # it's a stopword
+            if idx == -1
+                continue
+            end
             X[idx,i] += 1
         end
         
