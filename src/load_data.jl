@@ -4,6 +4,7 @@ Load data into a unified format, optionally save
 
 =#
 
+using LightXML
 
 type AffectDatum
     text::AbstractString
@@ -18,16 +19,6 @@ affect2ind = Dict{AbstractString,Int}("anger"=>1, "disgust"=>2, "fear"=>3,
                                     "anticipation"=>7, "trust"=>8, "negative"=>9,
                                     "positive"=>9)
                                     
-function load_semeval(path::AbstractString=joinpath("..","affect-data","semeval2006"))
-    
-    # TODO load gold, load valence
-    # TODO load xml
-    # TODO parse, join etc...
-
-
-    return semeval
-end
-
 function load_twitter(fname::AbstractString=joinpath("..","affect-data","Jan9-2012-tweets-clean.txt"))
 
     twitter_file = open(fname)
@@ -221,6 +212,56 @@ function load_alm(path::AbstractString=joinpath("..","affect-data","alm2007"))
     return data
 end
 
+
+function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeval2007","AffectiveText."), suff::AbstractString="test")
+    
+    doc = parse_file(join([path,suff,"affectivetext_",suff,".xml"], "") )
+    node = root(doc)
+    texts = Dict{Int,AbstractString}()
+    for c in child_elements(node)
+        text = content(c)
+        id = parse(Int,attribute(c,"id"))
+        texts[id] = text
+    end
+
+    emo_file = open(join([path,suff,"affectivetext_",suff,".emotions.gold"], "") )
+    affects = Dict{Int,Vector{Real}}()
+    for line in readlines(emo_file)
+        dat = split(line," ")
+        id = parse(Int,dat[1])
+        affect = [float(x)/100. for x in dat[2:end]]
+        affects[id] = affect
+    end
+    close(emo_file)
+    
+    val_file = open(join([path,suff,"affectivetext_",suff,".valence.gold"], "") )
+    valences = Dict{Int,Float64}()
+    for line in readlines(val_file)
+        dat = split(line," ")
+        id = parse(Int,dat[1])
+        val = float(dat[2])/100.
+        valences[id] = val
+    end
+    close(val_file)
+        
+    
+    data = AffectDatum[]
+    src = "semeval"
+    for id in keys(texts)
+        valence = valences[id]
+        text = texts[id]
+        _affect = affects[id]
+        affect = zeros(9)
+        affect[1:6] = _affect
+        affect[9] = valence
+        push!(data, AffectDatum(text,affect,src))
+    end
+
+
+    return data
+
+end
+
 function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomStream()) # TODO default args 
 
     alm = load_alm()
@@ -246,9 +287,14 @@ function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomStream
 
     n = convert(Int, round(length(hashtags * train_fraction) ) )
     hashtags_train, hashtags_test = hashtags[1:n], hashtags[n+1:end]
+    semeval_train, semeval_test = load_semeval(suff="test"), load_semeval(suff="trial")
 
-    train = vcat(alm_train, twitter_train, lexicon_train, hashtags_train)
-    test = vcat(alm_test, twitter_test, lexicon_test, hashtags_test)
+    train = vcat(alm_train, twitter_train, lexicon_train, hashtags_train, semeval_train)
+    test = vcat(alm_test, twitter_test, lexicon_test, hashtags_test, semeval_test)
+
+    # one more shuffle
+    train = shuffle!(rng, train)
+    test = shuffle!(rng, test)
 
     return train, test
 end
