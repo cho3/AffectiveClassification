@@ -5,7 +5,7 @@ Data loading and preprocessing stuff
 
 punctuation = Set{Char}(['.', ',', '\'', '"', '!', '?'])
 
-function load_stopwords(file::AbstractString="stopwords_en.txt")
+function load_stopwords(file::AbstractString=joinpath("..", "stopwords_en.txt"))
 
     f = open(file)
     stopwords = Set{AbstractString}()

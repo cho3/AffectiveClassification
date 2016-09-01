@@ -4,13 +4,6 @@ Load data into a unified format, optionally save
 
 =#
 
-using LightXML
-
-type AffectDatum
-    text::AbstractString
-    affect::Vector{Real}
-    source::AbstractString
-end
 #affect = anger,disgust,fear,joy,sadness,surprise,anticipation,trust,valence
 #positive/negative = valence = (see cambria hourglass of emotions paper)
 #anticipation/trust added from plutchik
@@ -25,7 +18,7 @@ function load_twitter(fname::AbstractString=joinpath("..","affect-data","Jan9-20
 
     twitter = AffectDatum[]
     src = "twitter"
-    for line in readlines(tweet_data)
+    for line in readlines(twitter_file)
         dat = split(line,'\t')
         label = strip(dat[end], (' ', ':', '\t', '\n'))
         text = strip(join(dat[2:end-1]), (' ', '\t', '\n'))
@@ -55,7 +48,7 @@ end
 
 
 
-function load_hashtags(fname::AbstractString=joinpath() )
+function load_hashtags(fname::AbstractString=joinpath("..","affect-data","NRC-Hashtag-Emotion-Lexicon-v0.2","NRC-Hashtag-Emotion-Lexicon-v0.2.txt") )
 
     hashtag_data = open(fname)
     # preload all data (its organized by affect class)
@@ -95,7 +88,7 @@ function load_hashtags(fname::AbstractString=joinpath() )
         seen[hashtag] = get(seen,hashtag, 0) + 1
     end
 
-    for (hashtag, count) in seen:
+    for (hashtag, count) in seen
         assert( count <= 8 ) #otherwise its being double counted or worse
     end
 
@@ -160,8 +153,11 @@ function load_isear(fname::AbstractString=joinpath() )
 end
 
 
-codemap = Dict{Int,String}(2=>"anger-disgust", 3=>"fear", 4=>"joy", 6=>"sadness", 7=>"surprise")
+codemap = Dict{Int,AbstractString}(2=>"anger-disgust", 3=>"fear", 4=>"joy", 6=>"sadness", 7=>"surprise")
 function load_fairytales(path::AbstractString, src::AbstractString)
+    
+    files = readdir(joinpath(path,"agree-sent"))
+
     data = AffectDatum[]
     for file in files
         if !isfile(joinpath(path,"agree-sent",file))
@@ -176,7 +172,7 @@ function load_fairytales(path::AbstractString, src::AbstractString)
             end
             text = strip(datum[3], ('\n', '\t', ' ', '\'', '"'))
             id = strip(datum[1], ('\n', '\t', ' '))
-            affect_str = get(codemap, int(strip(datum[2], ('\n', '\t', ' '))), "null")
+            affect_str = get(codemap, parse(Int, strip(datum[2], ('\n', '\t', ' '))), "null")
             if affect_str == "null"
                 print(datum)
                 continue
@@ -214,8 +210,8 @@ end
 
 
 function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeval2007","AffectiveText."), suff::AbstractString="test")
-    
-    doc = parse_file(join([path,suff,"affectivetext_",suff,".xml"], "") )
+
+    doc = parse_file(joinpath(join([path,suff], ""),join(["affectivetext_",suff,".xml"], "") ) )
     node = root(doc)
     texts = Dict{Int,AbstractString}()
     for c in child_elements(node)
@@ -224,7 +220,7 @@ function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeva
         texts[id] = text
     end
 
-    emo_file = open(join([path,suff,"affectivetext_",suff,".emotions.gold"], "") )
+    emo_file = open(joinpath(join([path,suff], ""),join(["affectivetext_",suff,".emotions.gold"], "") ) )
     affects = Dict{Int,Vector{Real}}()
     for line in readlines(emo_file)
         dat = split(line," ")
@@ -234,7 +230,7 @@ function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeva
     end
     close(emo_file)
     
-    val_file = open(join([path,suff,"affectivetext_",suff,".valence.gold"], "") )
+    val_file = open(joinpath(join([path,suff], ""),join(["affectivetext_",suff,".valence.gold"], "") ) )
     valences = Dict{Int,Float64}()
     for line in readlines(val_file)
         dat = split(line," ")
@@ -262,7 +258,7 @@ function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeva
 
 end
 
-function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomStream()) # TODO default args 
+function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomDevice()) # TODO default args 
 
     alm = load_alm()
     twitter = load_twitter()
@@ -276,16 +272,16 @@ function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomStream
     hashtags = shuffle!(rng, lexicon)
 
     # split into test set; should do it better but whatever
-    n = convert(Int, round(length(alm * train_fraction) ) )
+    n = convert(Int, round(length(alm) * train_fraction) ) 
     alm_train, alm_test = alm[1:n], alm[n+1:end]
 
-    n = convert(Int, round(length(twitter * train_fraction) ) )
+    n = convert(Int, round(length(twitter) * train_fraction) )
     twitter_train, twitter_test = twitter[1:n], twitter[n+1:end]
 
-    n = convert(Int, round(length(lexicon * train_fraction) ) )
+    n = convert(Int, round(length(lexicon) * train_fraction) ) 
     lexicon_train, lexicon_test = lexicon[1:n], lexicon[n+1:end]
 
-    n = convert(Int, round(length(hashtags * train_fraction) ) )
+    n = convert(Int, round(length(hashtags) * train_fraction) ) 
     hashtags_train, hashtags_test = hashtags[1:n], hashtags[n+1:end]
     semeval_train, semeval_test = load_semeval(suff="test"), load_semeval(suff="trial")
 
