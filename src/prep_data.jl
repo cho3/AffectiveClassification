@@ -29,7 +29,7 @@ function prep_word_vecs(data::Vector{AffectDatum}; stopwords::Set{AbstractString
         for word in text
             # TODO optional text normalization here (specific form of words can have different qualities as modifiers or affective)
             word_clean = lowercase( strip(word,  punctuation) )
-            if (word_clean in word2ind) || (word_clean in stopwords)
+            if (word_clean in keys(word2ind) ) || (word_clean in stopwords)
                continue 
             end
 
