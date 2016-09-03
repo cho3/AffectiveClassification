@@ -65,6 +65,7 @@ function load_hashtags(fname::AbstractString=joinpath("..","affect-data","NRC-Ha
         end
     end
 
+    # columns are: emotion, hashtag, association score \in [0, inf)
     hashtags = Dict{AbstractString,Vector{Real}}()
     seen = Dict{AbstractString,Int}()
     for line in data
@@ -74,9 +75,10 @@ function load_hashtags(fname::AbstractString=joinpath("..","affect-data","NRC-Ha
             continue
         end
         label = datum[1]
-        # TODO clean hashtags
-        hashtag = datum[2]
-        val = float(datum[3])
+        # clean hashtags
+        hashtag = strip(datum[2], ('#',) )
+        # assuming association score is roughly exponentially distirbuted--remap to uniform(0,1)
+        val = 1-exp( -float(datum[3])/ 0.5808695052528099 ) # from data, too lazy to put it into this script
         affects = get(hashtags, hashtag, zeros(9))
         idx = get(affect2ind, label, -1)
         if idx == -1
@@ -88,11 +90,22 @@ function load_hashtags(fname::AbstractString=joinpath("..","affect-data","NRC-Ha
         seen[hashtag] = get(seen,hashtag, 0) + 1
     end
 
+    # DEP: was for datachecking
     for (hashtag, count) in seen
-        assert( count <= 8 ) #otherwise its being double counted or worse
+        #assert( count <= 8 ) #otherwise its being double counted or worse
+        # removed since im stripping hashtags
+        if count > 8
+            println(hashtag)
+        end
     end
 
-    return hashtags
+    src = "hashtag"
+    hashtag_dataset = AffectDatum[]
+    for (hashtag, affect) in hashtags
+        push!(hashtag_dataset, AffectDatum(hashtag, affect, src))
+    end
+
+    return hashtag_dataset
 end
 
 
@@ -149,13 +162,17 @@ end
 
 function load_isear(fname::AbstractString=joinpath() )
 
+    error("function load_isear is unimplemented (access mdbs are weird)")
+    
     return isear
 end
 
-
+# codemap is specific to the alm dataset
 codemap = Dict{Int,AbstractString}(2=>"anger-disgust", 3=>"fear", 4=>"joy", 6=>"sadness", 7=>"surprise")
 function load_fairytales(path::AbstractString, src::AbstractString)
     
+    # path/dir corresponds to author
+    # each file in directory corresponds to a story, has a couple of annotated sentences
     files = readdir(joinpath(path,"agree-sent"))
 
     data = AffectDatum[]
@@ -163,6 +180,7 @@ function load_fairytales(path::AbstractString, src::AbstractString)
         if !isfile(joinpath(path,"agree-sent",file))
             continue
         end
+        # only look at high agreement files
         in_file = open(joinpath(path,"agree-sent",file))
         for line in readlines(in_file)
             datum = split(line,'@')
@@ -178,6 +196,7 @@ function load_fairytales(path::AbstractString, src::AbstractString)
                 continue
             end
             affect = zeros(9)
+            # anger and disgust were grouped into a single category--this is an adhoc way for credit assignment
             if affect_str == "anger-disgust"
                 affect[ affect2ind["anger"] ] = 0.5
                 affect[ affect2ind["disgust"] ] = 0.5
@@ -202,7 +221,6 @@ function load_alm(path::AbstractString=joinpath("..","affect-data","alm2007"))
     potter = load_fairytales(joinpath(path,"Potter"), "alm-Potter")
     andersen = load_fairytales(joinpath(path,"HCAndersen"), "alm-Andersen")
 
-
     data = vcat(grimm, potter, andersen)
 
     return data
@@ -211,6 +229,7 @@ end
 
 function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeval2007","AffectiveText."), suff::AbstractString="test")
 
+    # headline data is in xml (e.g. text)
     doc = parse_file(joinpath(join([path,suff], ""),join(["affectivetext_",suff,".xml"], "") ) )
     node = root(doc)
     texts = Dict{Int,AbstractString}()
@@ -220,6 +239,7 @@ function load_semeval(; path::AbstractString=joinpath("..","affect-data","semeva
         texts[id] = text
     end
 
+    # individual emotion scores \in [0,100] will map to [0,1]
     emo_file = open(joinpath(join([path,suff], ""),join(["affectivetext_",suff,".emotions.gold"], "") ) )
     affects = Dict{Int,Vector{Real}}()
     for line in readlines(emo_file)
@@ -269,7 +289,7 @@ function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomDevice
     alm = shuffle!(rng, alm)
     twitter = shuffle!(rng, twitter)
     lexicon = shuffle!(rng, lexicon)
-    hashtags = shuffle!(rng, lexicon)
+    hashtags = shuffle!(rng, hashtags)
 
     # split into test set; should do it better but whatever
     n = convert(Int, round(length(alm) * train_fraction) ) 
@@ -283,6 +303,7 @@ function load_data(; train_fraction::Float64=0.85, rng::AbstractRNG=RandomDevice
 
     n = convert(Int, round(length(hashtags) * train_fraction) ) 
     hashtags_train, hashtags_test = hashtags[1:n], hashtags[n+1:end]
+
     semeval_train, semeval_test = load_semeval(suff="test"), load_semeval(suff="trial")
 
     train = vcat(alm_train, twitter_train, lexicon_train, hashtags_train, semeval_train)
